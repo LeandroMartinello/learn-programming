@@ -1,0 +1,64 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background: #f5f5f5;
+  color: #111;
+}
+
+.app {
+  max-width: 460px;
+  margin: 24px auto;
+  padding: 12px;
+}
+
+h1,
+p {
+  margin: 0 0 8px;
+}
+
+#game {
+  width: 100%;
+  height: auto;
+  display: block;
+  border: 1px solid #333;
+  background: #fff;
+}
+
+.controls {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.controls-mobile {
+  display: none;
+}
+
+button {
+  border: 1px solid #333;
+  background: #fff;
+  color: #111;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+button:active {
+  background: #e8e8e8;
+}
+
+@media (max-width: 680px) {
+  .controls-mobile {
+    display: block;
+  }
+
+  .controls-mobile > div {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+}
