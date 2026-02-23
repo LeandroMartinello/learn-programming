@@ -1,17 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DIRECTIONS, createInitialState, setDirection, step, togglePause, type Direction } from "../game/snakeLogic";
+import { MESSAGES, type Lang } from "../i18n";
 
 const CONFIG = { width: 20, height: 20, tickMs: 140, cellPx: 20 };
 
-export default function SnakeGame() {
+type SnakeGameProps = {
+  lang: Lang;
+};
+
+export default function SnakeGame({ lang }: SnakeGameProps) {
   const [state, setState] = useState(() => createInitialState(CONFIG));
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const m = MESSAGES[lang].snake;
 
   const statusText = useMemo(() => {
-    if (state.gameOver) return "Game Over";
-    if (state.paused) return "Paused";
-    return "Running";
-  }, [state.gameOver, state.paused]);
+    if (state.gameOver) return m.gameOver;
+    if (state.paused) return m.paused;
+    return m.running;
+  }, [m.gameOver, m.paused, m.running, state.gameOver, state.paused]);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -74,9 +80,11 @@ export default function SnakeGame() {
   }, [state]);
 
   return (
-    <div className="game-panel">
-      <h2>Snake</h2>
-      <p className="muted">Score: {state.score} · {statusText}</p>
+    <div className="game-panel fullscreen-panel snake-panel">
+      <div className="snake-header">
+        <h2>{m.title}</h2>
+        <p className="muted">{m.score}: {state.score} · {statusText}</p>
+      </div>
       <canvas
         ref={canvasRef}
         width={CONFIG.width * CONFIG.cellPx}
@@ -86,17 +94,17 @@ export default function SnakeGame() {
       />
       <div className="controls">
         <button type="button" onClick={() => setState((prev) => togglePause(prev))}>
-          {state.paused ? "Resume" : "Pause"}
+          {state.paused ? m.resume : m.pause}
         </button>
         <button type="button" onClick={() => setState(createInitialState(CONFIG))}>
-          Restart
+          {m.restart}
         </button>
       </div>
       <div className="controls mobile-controls">
-        <button type="button" onClick={() => setState((prev) => setDirection(prev, DIRECTIONS.UP))}>Up</button>
-        <button type="button" onClick={() => setState((prev) => setDirection(prev, DIRECTIONS.LEFT))}>Left</button>
-        <button type="button" onClick={() => setState((prev) => setDirection(prev, DIRECTIONS.DOWN))}>Down</button>
-        <button type="button" onClick={() => setState((prev) => setDirection(prev, DIRECTIONS.RIGHT))}>Right</button>
+        <button type="button" onClick={() => setState((prev) => setDirection(prev, DIRECTIONS.UP))}>{m.up}</button>
+        <button type="button" onClick={() => setState((prev) => setDirection(prev, DIRECTIONS.LEFT))}>{m.left}</button>
+        <button type="button" onClick={() => setState((prev) => setDirection(prev, DIRECTIONS.DOWN))}>{m.down}</button>
+        <button type="button" onClick={() => setState((prev) => setDirection(prev, DIRECTIONS.RIGHT))}>{m.right}</button>
       </div>
     </div>
   );

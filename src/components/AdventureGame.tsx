@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { MESSAGES, type Lang } from "../i18n";
+import leanderAvatar from "../images/Leander_Avatar.png";
+import noemiAvatar from "../images/Noemi_Avatar.png";
 
 type Verb = "look" | "talk" | "take" | "use";
 type Scout = "leander" | "noemi";
@@ -19,6 +22,7 @@ type Hotspot = {
 
 type State = {
   activeScout: Scout;
+  scoutPositions: Record<Scout, { x: number; y: number }>;
   scene: SceneId;
   selectedVerb: Verb;
   inventory: string[];
@@ -92,6 +96,10 @@ const HOTSPOTS: Record<string, Hotspot> = {
 function createInitialState(): State {
   return {
     activeScout: "leander",
+    scoutPositions: {
+      leander: { x: 90, y: 232 },
+      noemi: { x: 130, y: 232 },
+    },
     scene: "forest",
     selectedVerb: "look",
     inventory: [],
@@ -240,7 +248,17 @@ function canTravel(state: State, nextScene: SceneId): boolean {
   return true;
 }
 
-function currentObjective(state: State): string {
+function currentObjective(state: State, lang: Lang): string {
+  if (lang === "de") {
+    if (!state.flags.hasLantern) return "Finde eine Laterne in der Eichenlichtung.";
+    if (!state.flags.hasKey) return "Lenke die Krähe ab und hol den silbernen Schlüssel.";
+    if (!state.flags.gateUnlocked) return "Öffne das Tor zum Geisterhaus.";
+    if (!state.flags.ghostCalmed) return "Beruhige den Geist mit der Laterne.";
+    if (!state.flags.hasCompass) return "Finde den Kompass in der Dachkammer.";
+    if (!state.flags.questComplete) return "Kehre mit Mondamulett und Kompass in den Wald zurück.";
+    return "Quest abgeschlossen.";
+  }
+
   if (!state.flags.hasLantern) return "Find a lantern at the Ancient Oak Glade.";
   if (!state.flags.hasKey) return "Distract the crow and get the silver key.";
   if (!state.flags.gateUnlocked) return "Unlock the haunted gate.";
@@ -250,13 +268,18 @@ function currentObjective(state: State): string {
   return "Quest complete.";
 }
 
-export default function AdventureGame() {
+type AdventureGameProps = {
+  lang: Lang;
+};
+
+export default function AdventureGame({ lang }: AdventureGameProps) {
   const [state, setState] = useState<State>(() => createInitialState());
   const [avatarLoaded, setAvatarLoaded] = useState({ leander: false, noemi: false });
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const scene = SCENES[state.scene];
   const questDone = state.flags.hasCompass && state.inventory.includes("moon amulet") && state.scene === "forest";
+  const m = MESSAGES[lang].adventure;
 
   useEffect(() => {
     if (questDone && !state.flags.questComplete) {
@@ -296,48 +319,86 @@ export default function AdventureGame() {
       ctx.fillText(h.label, h.rect.x + 5, h.rect.y + 15);
     });
 
-    const scoutX = state.activeScout === "leander" ? 90 : 125;
-    ctx.fillStyle = state.activeScout === "leander" ? "#2f66d2" : "#de4f85";
-    ctx.fillRect(scoutX, 232, 20, 32);
+    const leander = state.scoutPositions.leander;
+    const noemi = state.scoutPositions.noemi;
+
+    ctx.fillStyle = "#2f66d2";
+    ctx.fillRect(leander.x, leander.y, 20, 32);
     ctx.fillStyle = "#f5d1b0";
-    ctx.fillRect(scoutX + 3, 223, 14, 9);
-  }, [scene, state.activeScout]);
+    ctx.fillRect(leander.x + 3, leander.y - 9, 14, 9);
+
+    ctx.fillStyle = "#de4f85";
+    ctx.fillRect(noemi.x, noemi.y, 20, 32);
+    ctx.fillStyle = "#f5d1b0";
+    ctx.fillRect(noemi.x + 3, noemi.y - 9, 14, 9);
+
+    const active = state.scoutPositions[state.activeScout];
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(active.x - 2, active.y - 11, 24, 45);
+  }, [scene, state.activeScout, state.scoutPositions]);
 
   const status = useMemo(() => {
-    if (state.flags.questComplete) return "Quest complete. The woods are safe.";
-    return `Active scout: ${state.activeScout === "leander" ? "Leander" : "Noemi"}`;
-  }, [state.activeScout, state.flags.questComplete]);
+    if (state.flags.questComplete) return m.statusQuestComplete;
+    return `${m.statusActiveScout}: ${state.activeScout === "leander" ? "Leander" : "Noemi"}`;
+  }, [m.statusActiveScout, m.statusQuestComplete, state.activeScout, state.flags.questComplete]);
+  const shortLog = useMemo(() => state.log.slice(-4), [state.log]);
 
   return (
-    <div className="game-panel adventure-panel">
-      <h2>Leander's Abenteuer</h2>
-      <p className="muted">{status}</p>
+    <div className="game-panel adventure-panel fullscreen-panel">
+      <div className="adventure-header">
+        <h2>{m.title}</h2>
+        <p className="muted">{status}</p>
+      </div>
 
-      <div className="adventure-grid">
-        <div className="scene-panel">
+      <div className="adventure-grid compact">
+        <div className="scene-panel compact">
           <canvas
             ref={canvasRef}
             width={512}
             height={288}
             className="adventure-canvas"
             onClick={(event) => {
-              const rect = event.currentTarget.getBoundingClientRect();
-              const x = ((event.clientX - rect.left) * event.currentTarget.width) / rect.width;
-              const y = ((event.clientY - rect.top) * event.currentTarget.height) / rect.height;
+              const canvas = event.currentTarget;
+              const canvasWidth = canvas.width;
+              const canvasHeight = canvas.height;
+              const rect = canvas.getBoundingClientRect();
+              const x = ((event.clientX - rect.left) * canvasWidth) / rect.width;
+              const y = ((event.clientY - rect.top) * canvasHeight) / rect.height;
               const hit = scene.hotspots.find((id) => {
                 const r = HOTSPOTS[id].rect;
                 return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
               });
-              if (!hit) return;
-              setState((prev) => updateInteraction(prev, hit));
+              setState((prev) => {
+                const nextPos = {
+                  x: Math.max(0, Math.min(canvasWidth - 20, Math.round(x - 10))),
+                  y: Math.max(16, Math.min(canvasHeight - 32, Math.round(y - 16))),
+                };
+                let next: State = {
+                  ...prev,
+                  scoutPositions: {
+                    ...prev.scoutPositions,
+                    [prev.activeScout]: nextPos,
+                  },
+                };
+                if (hit) next = updateInteraction(next, hit);
+                return next;
+              });
             }}
           />
-          <p>{scene.title}: {scene.description}</p>
+          <p>
+            {scene.title}: {scene.description}
+          </p>
+          <ul className="log">
+            {shortLog.map((line, idx) => (
+              <li key={`${line}-${idx}`}>{line}</li>
+            ))}
+          </ul>
         </div>
 
-        <div className="side-panel">
+        <div className="side-panel compact">
           <section className="panel-box">
-            <h3>Scouts</h3>
+            <h3>{m.scouts}</h3>
             <div className="scout-row">
               <button
                 type="button"
@@ -345,7 +406,7 @@ export default function AdventureGame() {
                 onClick={() => setState((prev) => addLog({ ...prev, activeScout: "leander" }, "Leander takes point."))}
               >
                 <img
-                  src="/avatars/leander.png"
+                  src={leanderAvatar}
                   alt="Leander avatar"
                   onLoad={() => setAvatarLoaded((prev) => ({ ...prev, leander: true }))}
                   onError={() => setAvatarLoaded((prev) => ({ ...prev, leander: false }))}
@@ -359,7 +420,7 @@ export default function AdventureGame() {
                 onClick={() => setState((prev) => addLog({ ...prev, activeScout: "noemi" }, "Noemi takes point."))}
               >
                 <img
-                  src="/avatars/noemi.png"
+                  src={noemiAvatar}
                   alt="Noemi avatar"
                   onLoad={() => setAvatarLoaded((prev) => ({ ...prev, noemi: true }))}
                   onError={() => setAvatarLoaded((prev) => ({ ...prev, noemi: false }))}
@@ -371,12 +432,12 @@ export default function AdventureGame() {
           </section>
 
           <section className="panel-box">
-            <h3>Objective</h3>
-            <p>{currentObjective(state)}</p>
+            <h3>{m.objective}</h3>
+            <p>{currentObjective(state, lang)}</p>
           </section>
 
           <section className="panel-box">
-            <h3>Verbs</h3>
+            <h3>{m.verbsActions}</h3>
             <div className="chips">
               {VERBS.map((verb) => (
                 <button
@@ -385,26 +446,17 @@ export default function AdventureGame() {
                   className={state.selectedVerb === verb ? "active" : ""}
                   onClick={() => setState((prev) => ({ ...prev, selectedVerb: verb }))}
                 >
-                  {verb.toUpperCase()}
+                  {verb === "look" && m.look}
+                  {verb === "talk" && m.talk}
+                  {verb === "take" && m.take}
+                  {verb === "use" && m.use}
                 </button>
               ))}
-            </div>
-          </section>
-
-          <section className="panel-box">
-            <h3>Interactions</h3>
-            <div className="chips">
               {scene.hotspots.map((id) => (
                 <button key={id} type="button" onClick={() => setState((prev) => updateInteraction(prev, id))}>
                   {HOTSPOTS[id].label}
                 </button>
               ))}
-            </div>
-          </section>
-
-          <section className="panel-box">
-            <h3>Travel</h3>
-            <div className="chips">
               {scene.travel.map((target) => (
                 <button
                   key={target}
@@ -424,26 +476,17 @@ export default function AdventureGame() {
           </section>
 
           <section className="panel-box">
-            <h3>Inventory</h3>
+            <h3>{m.inventory}</h3>
             <div className="chips">
               {state.inventory.length === 0 ? (
-                <span className="empty">No items yet.</span>
+                <span className="empty">{m.noItems}</span>
               ) : (
                 state.inventory.map((item) => <span key={item} className="pill">{item}</span>)
               )}
             </div>
           </section>
 
-          <section className="panel-box">
-            <h3>Log</h3>
-            <ul className="log">
-              {state.log.map((line, idx) => (
-                <li key={`${line}-${idx}`}>{line}</li>
-              ))}
-            </ul>
-          </section>
-
-          <button type="button" onClick={() => setState(createInitialState())}>Restart Adventure</button>
+          <button type="button" onClick={() => setState(createInitialState())}>{m.restart}</button>
         </div>
       </div>
     </div>
