@@ -1,15 +1,24 @@
 # learn-programming
 leander learns to code computer games
 
-## Snake (classic)
+## Vite + React + TypeScript Game Hub
 
 ### Start
-1. Start a local static server from this folder:
+1. Install dependencies:
    ```bash
-   python3 -m http.server 8000
+   npm install
    ```
-2. Open:
-   `http://localhost:8000/index.html`
+2. Run the Vite dev server:
+   ```bash
+   npm run dev
+   ```
+3. Open the local URL shown by Vite (typically `http://localhost:5173`).
+4. In the launcher page, select:
+   - `Snake`
+   - `Leander's Abenteuer`
+5. Optional avatars for adventure:
+   - add `public/avatars/leander.png`
+   - add `public/avatars/noemi.png`
 
 ### Controls
 - Keyboard: Arrow keys or `WASD`
@@ -17,10 +26,16 @@ leander learns to code computer games
 - Restart: `Restart` button
 - Mobile/on-screen: `Up`, `Down`, `Left`, `Right` buttons
 
+### Adventure controls
+- Click verbs (`LOOK`, `TALK`, `TAKE`, `USE`)
+- Click hotspots in list or directly on the scene canvas
+- Use travel buttons to move between locations
+- Switch active scout (Leander/Noemi) from the scout cards
+
 ### Tests
 Run core logic tests:
 ```bash
-node --test tests/snakeLogic.test.js
+npm test
 ```
 
 ### Manual verification checklist
