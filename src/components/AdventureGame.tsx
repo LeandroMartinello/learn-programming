@@ -1,0 +1,451 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+
+type Verb = "look" | "talk" | "take" | "use";
+type Scout = "leander" | "noemi";
+type SceneId = "forest" | "oak" | "gate" | "foyer" | "attic";
+
+type Scene = {
+  title: string;
+  description: string;
+  palette: { sky: string; ground: string; detail: string };
+  hotspots: string[];
+  travel: SceneId[];
+};
+
+type Hotspot = {
+  label: string;
+  rect: { x: number; y: number; w: number; h: number };
+};
+
+type State = {
+  activeScout: Scout;
+  scene: SceneId;
+  selectedVerb: Verb;
+  inventory: string[];
+  flags: {
+    hasBerries: boolean;
+    hasLantern: boolean;
+    crowDistracted: boolean;
+    hasKey: boolean;
+    gateUnlocked: boolean;
+    ghostCalmed: boolean;
+    hasCompass: boolean;
+    questComplete: boolean;
+  };
+  log: string[];
+};
+
+const VERBS: Verb[] = ["look", "talk", "take", "use"];
+
+const SCENES: Record<SceneId, Scene> = {
+  forest: {
+    title: "Whispering Woods",
+    description: "Fog drifts through old pines.",
+    palette: { sky: "#8fd4ff", ground: "#3f7f4e", detail: "#255b2f" },
+    hotspots: ["berries", "signpost", "campfire"],
+    travel: ["oak", "gate"],
+  },
+  oak: {
+    title: "Ancient Oak Glade",
+    description: "A giant oak guards a ranger cache.",
+    palette: { sky: "#b4dd8f", ground: "#5f8f46", detail: "#3d5d2f" },
+    hotspots: ["ranger-cache", "oak-spirit"],
+    travel: ["forest", "gate"],
+  },
+  gate: {
+    title: "Haunted House Gate",
+    description: "An iron gate blocks the hill path.",
+    palette: { sky: "#9ba7cc", ground: "#61707d", detail: "#39444f" },
+    hotspots: ["crow", "gate-lock"],
+    travel: ["forest", "oak", "foyer"],
+  },
+  foyer: {
+    title: "Haunted Foyer",
+    description: "A lonely ghost circles a cracked chandelier.",
+    palette: { sky: "#7b6e96", ground: "#5d4f71", detail: "#3f3551" },
+    hotspots: ["ghost", "staircase"],
+    travel: ["gate", "attic"],
+  },
+  attic: {
+    title: "Attic Observatory",
+    description: "Moonlight hits an explorer chest.",
+    palette: { sky: "#6d6d7f", ground: "#767282", detail: "#494757" },
+    hotspots: ["explorer-chest", "window"],
+    travel: ["foyer", "forest"],
+  },
+};
+
+const HOTSPOTS: Record<string, Hotspot> = {
+  berries: { label: "Berry Bush", rect: { x: 70, y: 180, w: 80, h: 70 } },
+  signpost: { label: "Trail Signpost", rect: { x: 250, y: 120, w: 60, h: 120 } },
+  campfire: { label: "Cold Campfire", rect: { x: 370, y: 190, w: 70, h: 55 } },
+  "ranger-cache": { label: "Ranger Cache", rect: { x: 300, y: 160, w: 100, h: 70 } },
+  "oak-spirit": { label: "Oak Spirit", rect: { x: 90, y: 60, w: 120, h: 170 } },
+  crow: { label: "Crow on Lantern", rect: { x: 320, y: 60, w: 120, h: 90 } },
+  "gate-lock": { label: "Iron Gate Lock", rect: { x: 200, y: 100, w: 90, h: 140 } },
+  ghost: { label: "Restless Ghost", rect: { x: 210, y: 80, w: 90, h: 130 } },
+  staircase: { label: "Staircase", rect: { x: 370, y: 70, w: 90, h: 170 } },
+  "explorer-chest": { label: "Explorer Chest", rect: { x: 180, y: 165, w: 140, h: 75 } },
+  window: { label: "Attic Window", rect: { x: 360, y: 35, w: 100, h: 120 } },
+};
+
+function createInitialState(): State {
+  return {
+    activeScout: "leander",
+    scene: "forest",
+    selectedVerb: "look",
+    inventory: [],
+    flags: {
+      hasBerries: false,
+      hasLantern: false,
+      crowDistracted: false,
+      hasKey: false,
+      gateUnlocked: false,
+      ghostCalmed: false,
+      hasCompass: false,
+      questComplete: false,
+    },
+    log: [
+      "Leander: We should map the woods before sunset.",
+      "Noemi: And solve the haunted house mystery.",
+    ],
+  };
+}
+
+function addLog(prev: State, line: string): State {
+  return { ...prev, log: [...prev.log, line].slice(-8) };
+}
+
+function updateInteraction(prev: State, hotspotId: string): State {
+  const actor = prev.activeScout === "leander" ? "Leander" : "Noemi";
+  const verb = prev.selectedVerb;
+  const next: State = {
+    ...prev,
+    inventory: [...prev.inventory],
+    flags: { ...prev.flags },
+    log: [...prev.log],
+  };
+
+  const push = (line: string) => {
+    next.log = [...next.log, line].slice(-8);
+  };
+  const hasItem = (item: string) => next.inventory.includes(item);
+  const addItem = (item: string) => {
+    if (!hasItem(item)) next.inventory.push(item);
+  };
+  const removeItem = (item: string) => {
+    next.inventory = next.inventory.filter((x) => x !== item);
+  };
+
+  if (hotspotId === "berries") {
+    if (verb === "take") {
+      if (next.flags.hasBerries) push(`${actor}: We already collected berries.`);
+      else {
+        next.flags.hasBerries = true;
+        addItem("berries");
+        push(`${actor}: Berries collected.`);
+      }
+    } else push(`${actor}: Fresh berries near the path.`);
+    return next;
+  }
+
+  if (hotspotId === "ranger-cache") {
+    if (verb === "take" || verb === "use") {
+      if (next.flags.hasLantern) push(`${actor}: Lantern already secured.`);
+      else {
+        next.flags.hasLantern = true;
+        addItem("lantern");
+        push(`${actor}: Found an old lantern.`);
+      }
+    } else push(`${actor}: The ranger cache might hide useful gear.`);
+    return next;
+  }
+
+  if (hotspotId === "crow") {
+    if (verb === "use") {
+      if (next.flags.hasBerries && !next.flags.crowDistracted) {
+        next.flags.crowDistracted = true;
+        next.flags.hasBerries = false;
+        removeItem("berries");
+        push(`${actor}: Crow distracted. A silver key drops.`);
+      } else push(`${actor}: The crow wants food.`);
+    } else if (verb === "take") {
+      if (next.flags.crowDistracted && !next.flags.hasKey) {
+        next.flags.hasKey = true;
+        addItem("silver key");
+        push(`${actor}: Silver key acquired.`);
+      } else push(`${actor}: Too risky while the crow watches.`);
+    } else push(`${actor}: The crow guards something shiny.`);
+    return next;
+  }
+
+  if (hotspotId === "gate-lock") {
+    if (verb === "use") {
+      if (next.flags.hasKey && !next.flags.gateUnlocked) {
+        next.flags.gateUnlocked = true;
+        removeItem("silver key");
+        push(`${actor}: Gate unlocked.`);
+      } else push(`${actor}: The lock needs a key.`);
+    } else push(`${actor}: Heavy iron lock.`);
+    return next;
+  }
+
+  if (hotspotId === "ghost") {
+    if (verb === "talk") {
+      if (next.flags.hasLantern && !next.flags.ghostCalmed) {
+        next.flags.ghostCalmed = true;
+        addItem("moon amulet");
+        push("Ghost: Thank you for the light. Take this moon amulet.");
+      } else if (!next.flags.hasLantern) {
+        push("Ghost: Bring me light.");
+      } else {
+        push("Ghost: The attic chest holds what you seek.");
+      }
+    } else push(`${actor}: The ghost is restless.`);
+    return next;
+  }
+
+  if (hotspotId === "staircase") {
+    if (verb === "use") {
+      if (next.flags.ghostCalmed) {
+        next.scene = "attic";
+        push(`${actor}: Heading to the attic.`);
+      } else push(`${actor}: The ghost blocks the stairs.`);
+    } else push(`${actor}: Old staircase to the attic.`);
+    return next;
+  }
+
+  if (hotspotId === "explorer-chest") {
+    if (verb === "take" || verb === "use") {
+      if (!next.flags.hasCompass) {
+        next.flags.hasCompass = true;
+        addItem("compass");
+        push(`${actor}: Compass recovered.`);
+      } else push(`${actor}: Nothing else in the chest.`);
+    } else push(`${actor}: Explorer chest with scout markings.`);
+    return next;
+  }
+
+  if (hotspotId === "signpost") return addLog(next, `${actor}: Sign says 'House Hill -> Beware at night.'`);
+  if (hotspotId === "campfire") return addLog(next, `${actor}: Cold campfire, no wood left.`);
+  if (hotspotId === "oak-spirit") return addLog(next, "Oak Spirit: Feed the crow and the gate will open.");
+  if (hotspotId === "window") return addLog(next, `${actor}: The woods look calmer from here.`);
+
+  return next;
+}
+
+function canTravel(state: State, nextScene: SceneId): boolean {
+  if (nextScene === "foyer" && !state.flags.gateUnlocked) return false;
+  if (nextScene === "attic" && !state.flags.ghostCalmed) return false;
+  return true;
+}
+
+function currentObjective(state: State): string {
+  if (!state.flags.hasLantern) return "Find a lantern at the Ancient Oak Glade.";
+  if (!state.flags.hasKey) return "Distract the crow and get the silver key.";
+  if (!state.flags.gateUnlocked) return "Unlock the haunted gate.";
+  if (!state.flags.ghostCalmed) return "Calm the ghost with a lantern conversation.";
+  if (!state.flags.hasCompass) return "Recover the compass from the attic chest.";
+  if (!state.flags.questComplete) return "Return to the forest with moon amulet and compass.";
+  return "Quest complete.";
+}
+
+export default function AdventureGame() {
+  const [state, setState] = useState<State>(() => createInitialState());
+  const [avatarLoaded, setAvatarLoaded] = useState({ leander: false, noemi: false });
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const scene = SCENES[state.scene];
+  const questDone = state.flags.hasCompass && state.inventory.includes("moon amulet") && state.scene === "forest";
+
+  useEffect(() => {
+    if (questDone && !state.flags.questComplete) {
+      setState((prev) => {
+        const next = { ...prev, flags: { ...prev.flags, questComplete: true } };
+        return addLog(next, "Leander & Noemi: The haunted house mystery is solved.");
+      });
+    }
+  }, [questDone, state.flags.questComplete]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.fillStyle = scene.palette.sky;
+    ctx.fillRect(0, 0, canvas.width, canvas.height * 0.5);
+    ctx.fillStyle = scene.palette.ground;
+    ctx.fillRect(0, canvas.height * 0.5, canvas.width, canvas.height * 0.5);
+
+    ctx.fillStyle = scene.palette.detail;
+    for (let i = 0; i < 16; i += 1) {
+      const x = (i * 33) % canvas.width;
+      const y = 150 + ((i * 17) % 90);
+      ctx.fillRect(x, y, 12, 24);
+    }
+
+    scene.hotspots.forEach((id) => {
+      const h = HOTSPOTS[id];
+      ctx.fillStyle = "rgba(255,255,255,0.18)";
+      ctx.fillRect(h.rect.x, h.rect.y, h.rect.w, h.rect.h);
+      ctx.strokeStyle = "rgba(255,255,255,0.66)";
+      ctx.strokeRect(h.rect.x, h.rect.y, h.rect.w, h.rect.h);
+      ctx.fillStyle = "#1a2035";
+      ctx.font = "12px sans-serif";
+      ctx.fillText(h.label, h.rect.x + 5, h.rect.y + 15);
+    });
+
+    const scoutX = state.activeScout === "leander" ? 90 : 125;
+    ctx.fillStyle = state.activeScout === "leander" ? "#2f66d2" : "#de4f85";
+    ctx.fillRect(scoutX, 232, 20, 32);
+    ctx.fillStyle = "#f5d1b0";
+    ctx.fillRect(scoutX + 3, 223, 14, 9);
+  }, [scene, state.activeScout]);
+
+  const status = useMemo(() => {
+    if (state.flags.questComplete) return "Quest complete. The woods are safe.";
+    return `Active scout: ${state.activeScout === "leander" ? "Leander" : "Noemi"}`;
+  }, [state.activeScout, state.flags.questComplete]);
+
+  return (
+    <div className="game-panel adventure-panel">
+      <h2>Leander's Abenteuer</h2>
+      <p className="muted">{status}</p>
+
+      <div className="adventure-grid">
+        <div className="scene-panel">
+          <canvas
+            ref={canvasRef}
+            width={512}
+            height={288}
+            className="adventure-canvas"
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              const x = ((event.clientX - rect.left) * event.currentTarget.width) / rect.width;
+              const y = ((event.clientY - rect.top) * event.currentTarget.height) / rect.height;
+              const hit = scene.hotspots.find((id) => {
+                const r = HOTSPOTS[id].rect;
+                return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+              });
+              if (!hit) return;
+              setState((prev) => updateInteraction(prev, hit));
+            }}
+          />
+          <p>{scene.title}: {scene.description}</p>
+        </div>
+
+        <div className="side-panel">
+          <section className="panel-box">
+            <h3>Scouts</h3>
+            <div className="scout-row">
+              <button
+                type="button"
+                className={state.activeScout === "leander" ? "active" : ""}
+                onClick={() => setState((prev) => addLog({ ...prev, activeScout: "leander" }, "Leander takes point."))}
+              >
+                <img
+                  src="/avatars/leander.png"
+                  alt="Leander avatar"
+                  onLoad={() => setAvatarLoaded((prev) => ({ ...prev, leander: true }))}
+                  onError={() => setAvatarLoaded((prev) => ({ ...prev, leander: false }))}
+                />
+                {!avatarLoaded.leander && <span className="avatar-fallback">L</span>}
+                <span>Leander</span>
+              </button>
+              <button
+                type="button"
+                className={state.activeScout === "noemi" ? "active" : ""}
+                onClick={() => setState((prev) => addLog({ ...prev, activeScout: "noemi" }, "Noemi takes point."))}
+              >
+                <img
+                  src="/avatars/noemi.png"
+                  alt="Noemi avatar"
+                  onLoad={() => setAvatarLoaded((prev) => ({ ...prev, noemi: true }))}
+                  onError={() => setAvatarLoaded((prev) => ({ ...prev, noemi: false }))}
+                />
+                {!avatarLoaded.noemi && <span className="avatar-fallback">N</span>}
+                <span>Noemi</span>
+              </button>
+            </div>
+          </section>
+
+          <section className="panel-box">
+            <h3>Objective</h3>
+            <p>{currentObjective(state)}</p>
+          </section>
+
+          <section className="panel-box">
+            <h3>Verbs</h3>
+            <div className="chips">
+              {VERBS.map((verb) => (
+                <button
+                  key={verb}
+                  type="button"
+                  className={state.selectedVerb === verb ? "active" : ""}
+                  onClick={() => setState((prev) => ({ ...prev, selectedVerb: verb }))}
+                >
+                  {verb.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel-box">
+            <h3>Interactions</h3>
+            <div className="chips">
+              {scene.hotspots.map((id) => (
+                <button key={id} type="button" onClick={() => setState((prev) => updateInteraction(prev, id))}>
+                  {HOTSPOTS[id].label}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel-box">
+            <h3>Travel</h3>
+            <div className="chips">
+              {scene.travel.map((target) => (
+                <button
+                  key={target}
+                  type="button"
+                  disabled={!canTravel(state, target)}
+                  onClick={() =>
+                    setState((prev) => {
+                      if (!canTravel(prev, target)) return addLog(prev, "Path blocked.");
+                      return addLog({ ...prev, scene: target }, `Traveling to ${SCENES[target].title}.`);
+                    })
+                  }
+                >
+                  {SCENES[target].title}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel-box">
+            <h3>Inventory</h3>
+            <div className="chips">
+              {state.inventory.length === 0 ? (
+                <span className="empty">No items yet.</span>
+              ) : (
+                state.inventory.map((item) => <span key={item} className="pill">{item}</span>)
+              )}
+            </div>
+          </section>
+
+          <section className="panel-box">
+            <h3>Log</h3>
+            <ul className="log">
+              {state.log.map((line, idx) => (
+                <li key={`${line}-${idx}`}>{line}</li>
+              ))}
+            </ul>
+          </section>
+
+          <button type="button" onClick={() => setState(createInitialState())}>Restart Adventure</button>
+        </div>
+      </div>
+    </div>
+  );
+}
