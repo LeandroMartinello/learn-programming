@@ -23,6 +23,8 @@ type Hotspot = {
 type State = {
   activeScout: Scout;
   scoutPositions: Record<Scout, { x: number; y: number }>;
+  scoutTargets: Record<Scout, { x: number; y: number } | null>;
+  walkFrame: number;
   scene: SceneId;
   selectedVerb: Verb;
   inventory: string[];
@@ -100,6 +102,11 @@ function createInitialState(): State {
       leander: { x: 90, y: 232 },
       noemi: { x: 130, y: 232 },
     },
+    scoutTargets: {
+      leander: null,
+      noemi: null,
+    },
+    walkFrame: 0,
     scene: "forest",
     selectedVerb: "look",
     inventory: [],
@@ -291,6 +298,55 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
   }, [questDone, state.flags.questComplete]);
 
   useEffect(() => {
+    if (state.scoutTargets.leander === null && state.scoutTargets.noemi === null) return;
+
+    let animationFrame = 0;
+    const tick = () => {
+      setState((prev) => {
+        const scouts: Scout[] = ["leander", "noemi"];
+        const next: State = {
+          ...prev,
+          walkFrame: (prev.walkFrame + 1) % 120,
+          scoutPositions: { ...prev.scoutPositions },
+          scoutTargets: { ...prev.scoutTargets },
+        };
+        let changed = false;
+
+        scouts.forEach((scout) => {
+          const target = prev.scoutTargets[scout];
+          if (!target) return;
+
+          const pos = prev.scoutPositions[scout];
+          const dx = target.x - pos.x;
+          const dy = target.y - pos.y;
+          const distance = Math.hypot(dx, dy);
+          const speed = 2.2;
+
+          if (distance <= speed) {
+            next.scoutPositions[scout] = { ...target };
+            next.scoutTargets[scout] = null;
+            changed = true;
+            return;
+          }
+
+          next.scoutPositions[scout] = {
+            x: pos.x + (dx / distance) * speed,
+            y: pos.y + (dy / distance) * speed,
+          };
+          changed = true;
+        });
+
+        return changed ? next : prev;
+      });
+
+      animationFrame = window.requestAnimationFrame(tick);
+    };
+
+    animationFrame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [state.scoutTargets.leander, state.scoutTargets.noemi]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -319,24 +375,29 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
       ctx.fillText(h.label, h.rect.x + 5, h.rect.y + 15);
     });
 
-    const leander = state.scoutPositions.leander;
-    const noemi = state.scoutPositions.noemi;
+    const drawScout = (scout: Scout, color: string) => {
+      const pos = state.scoutPositions[scout];
+      const moving = state.scoutTargets[scout] !== null;
+      const legShift = moving && state.walkFrame % 16 < 8 ? 2 : -2;
 
-    ctx.fillStyle = "#2f66d2";
-    ctx.fillRect(leander.x, leander.y, 20, 32);
-    ctx.fillStyle = "#f5d1b0";
-    ctx.fillRect(leander.x + 3, leander.y - 9, 14, 9);
+      ctx.fillStyle = color;
+      ctx.fillRect(pos.x, pos.y, 20, 22);
 
-    ctx.fillStyle = "#de4f85";
-    ctx.fillRect(noemi.x, noemi.y, 20, 32);
-    ctx.fillStyle = "#f5d1b0";
-    ctx.fillRect(noemi.x + 3, noemi.y - 9, 14, 9);
+      ctx.fillRect(pos.x + 2, pos.y + 22, 6, 10 + legShift);
+      ctx.fillRect(pos.x + 12, pos.y + 22, 6, 10 - legShift);
+
+      ctx.fillStyle = "#f5d1b0";
+      ctx.fillRect(pos.x + 3, pos.y - 9, 14, 9);
+    };
+
+    drawScout("leander", "#2f66d2");
+    drawScout("noemi", "#de4f85");
 
     const active = state.scoutPositions[state.activeScout];
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 2;
     ctx.strokeRect(active.x - 2, active.y - 11, 24, 45);
-  }, [scene, state.activeScout, state.scoutPositions]);
+  }, [scene, state.activeScout, state.scoutPositions, state.scoutTargets, state.walkFrame]);
 
   const status = useMemo(() => {
     if (state.flags.questComplete) return m.statusQuestComplete;
@@ -376,9 +437,9 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
                 };
                 let next: State = {
                   ...prev,
-                  scoutPositions: {
-                    ...prev.scoutPositions,
-                    [prev.activeScout]: nextPos,
+                  scoutTargets: {
+                    ...prev.scoutTargets,
+                    leander: nextPos,
                   },
                 };
                 if (hit) next = updateInteraction(next, hit);
