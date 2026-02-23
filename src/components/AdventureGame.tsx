@@ -48,6 +48,34 @@ type State = {
 const VERBS: Verb[] = ["look", "talk", "take", "use"];
 const SPRITE_COLS = 6;
 const SPRITE_ROWS = 4;
+const COLOR_KEY = { r: 0x18, g: 0xfd, b: 0xfe };
+const COLOR_TOLERANCE = 28;
+
+function makeColorKeyCanvas(image: HTMLImageElement): HTMLCanvasElement {
+  const offscreen = document.createElement("canvas");
+  offscreen.width = image.naturalWidth;
+  offscreen.height = image.naturalHeight;
+  const offCtx = offscreen.getContext("2d");
+  if (!offCtx) return offscreen;
+
+  offCtx.drawImage(image, 0, 0);
+  const imageData = offCtx.getImageData(0, 0, offscreen.width, offscreen.height);
+  const pixels = imageData.data;
+  const toleranceSq = COLOR_TOLERANCE * COLOR_TOLERANCE;
+
+  for (let i = 0; i < pixels.length; i += 4) {
+    const dr = pixels[i] - COLOR_KEY.r;
+    const dg = pixels[i + 1] - COLOR_KEY.g;
+    const db = pixels[i + 2] - COLOR_KEY.b;
+    const distanceSq = dr * dr + dg * dg + db * db;
+    if (distanceSq <= toleranceSq) {
+      pixels[i + 3] = 0;
+    }
+  }
+
+  offCtx.putImageData(imageData, 0, 0);
+  return offscreen;
+}
 
 const SCENES: Record<SceneId, Scene> = {
   forest: {
@@ -292,6 +320,13 @@ type AdventureGameProps = {
 export default function AdventureGame({ lang }: AdventureGameProps) {
   const [state, setState] = useState<State>(() => createInitialState());
   const [avatarLoaded, setAvatarLoaded] = useState({ leander: false, noemi: false });
+  const [spriteLayers, setSpriteLayers] = useState<{
+    leander: HTMLCanvasElement | null;
+    noemi: HTMLCanvasElement | null;
+  }>({
+    leander: null,
+    noemi: null,
+  });
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const scene = SCENES[state.scene];
@@ -312,6 +347,38 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
     img.src = noemiSpriteSheet;
     return img;
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const ensureKeyed = (
+      img: HTMLImageElement,
+      setKey: (canvas: HTMLCanvasElement) => void
+    ) => {
+      const apply = () => {
+        if (cancelled || img.naturalWidth <= 0) return;
+        const keyed = makeColorKeyCanvas(img);
+        if (!cancelled) setKey(keyed);
+      };
+
+      if (img.complete && img.naturalWidth > 0) {
+        apply();
+      } else {
+        img.addEventListener("load", apply, { once: true });
+      }
+    };
+
+    ensureKeyed(leanderSpriteImage, (canvas) =>
+      setSpriteLayers((prev) => ({ ...prev, leander: canvas }))
+    );
+    ensureKeyed(noemiSpriteImage, (canvas) =>
+      setSpriteLayers((prev) => ({ ...prev, noemi: canvas }))
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [leanderSpriteImage, noemiSpriteImage]);
 
   useEffect(() => {
     if (questDone && !state.flags.questComplete) {
@@ -422,11 +489,11 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
       const pos = state.scoutPositions[scout];
       const moving = state.scoutTargets[scout] !== null;
       const legShift = moving && state.walkFrame % 16 < 8 ? 2 : -2;
-      const spriteImage = scout === "leander" ? leanderSpriteImage : noemiSpriteImage;
+      const spriteImage = scout === "leander" ? spriteLayers.leander : spriteLayers.noemi;
 
-      if (spriteImage.complete && spriteImage.naturalWidth > 0) {
-        const frameW = spriteImage.naturalWidth / SPRITE_COLS;
-        const frameH = spriteImage.naturalHeight / SPRITE_ROWS;
+      if (spriteImage) {
+        const frameW = spriteImage.width / SPRITE_COLS;
+        const frameH = spriteImage.height / SPRITE_ROWS;
         const frame = moving ? Math.floor(state.walkFrame / 6) % SPRITE_COLS : 0;
         const row = state.scoutRows[scout] % SPRITE_ROWS;
         ctx.drawImage(
@@ -460,14 +527,13 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
     ctx.strokeRect(active.x - 2, active.y - 11, 24, 45);
   }, [
     backgroundImage,
-    leanderSpriteImage,
-    noemiSpriteImage,
     scene,
     state.activeScout,
     state.scoutPositions,
     state.scoutRows,
     state.scoutTargets,
     state.walkFrame,
+    spriteLayers,
   ]);
 
   const status = useMemo(() => {
@@ -510,7 +576,7 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
                   ...prev,
                   scoutTargets: {
                     ...prev.scoutTargets,
-                    leander: nextPos,
+                    [prev.activeScout]: nextPos,
                   },
                 };
                 if (hit) next = updateInteraction(next, hit);
