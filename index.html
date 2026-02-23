@@ -3,32 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Snake</title>
+    <title>Game Hub</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main class="app">
-      <h1>Snake</h1>
-      <p class="score">Score: <span id="score">0</span></p>
-      <p id="status">Running</p>
+    <main class="app app-landing">
+      <h1>Game Hub</h1>
+      <p>Choose a game from the list.</p>
 
-      <canvas id="game" width="400" height="400" aria-label="Snake game board"></canvas>
+      <section class="game-list" aria-label="Game list">
+        <article class="game-card">
+          <h2>Snake</h2>
+          <p>Classic snake loop on a fixed grid.</p>
+          <a class="game-link" href="./snake.html">Open Snake</a>
+        </article>
 
-      <div class="controls">
-        <button id="pause" type="button">Pause</button>
-        <button id="restart" type="button">Restart</button>
-      </div>
-
-      <div class="controls controls-mobile" aria-label="On-screen controls">
-        <button id="up" type="button">Up</button>
-        <div>
-          <button id="left" type="button">Left</button>
-          <button id="down" type="button">Down</button>
-          <button id="right" type="button">Right</button>
-        </div>
-      </div>
+        <article class="game-card">
+          <h2>Leander's Abenteuer</h2>
+          <p>Small pixel-art adventure prototype.</p>
+          <a class="game-link" href="./adventure.html">Open Leander's Abenteuer</a>
+        </article>
+      </section>
     </main>
-
-    <script type="module" src="./src/main.js"></script>
   </body>
 </html>

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Leander's Abenteuer</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <a class="back-link" href="./index.html">Back to game list</a>
+      <h1>Leander's Abenteuer</h1>
+      <p id="adventure-status">Move with Arrow Keys or WASD.</p>
+      <canvas
+        id="adventure"
+        width="320"
+        height="320"
+        aria-label="Leander's Abenteuer pixel-art map"
+      ></canvas>
+    </main>
+
+    <script type="module" src="./src/adventure.js"></script>
+  </body>
+</html>

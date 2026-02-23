@@ -10,6 +10,9 @@ leander learns to code computer games
    ```
 2. Open:
    `http://localhost:8000/index.html`
+3. In the landing page, choose:
+   - `Snake` (`/snake.html`)
+   - `Leander's Abenteuer` (`/adventure.html`)
 
 ### Controls
 - Keyboard: Arrow keys or `WASD`
