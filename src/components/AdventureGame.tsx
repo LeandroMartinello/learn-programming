@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MESSAGES, type Lang } from "../i18n";
 import leanderAvatar from "../images/Leander_Avatar.png";
 import noemiAvatar from "../images/Noemi_Avatar.png";
+import hauntedHouseBackground from "../images/haunted_house.png";
+import leanderSpriteSheet from "../images/Sprites_Leander.png";
+import noemiSpriteSheet from "../images/Sprites_Noemi.png";
 
 type Verb = "look" | "talk" | "take" | "use";
 type Scout = "leander" | "noemi";
@@ -24,6 +27,7 @@ type State = {
   activeScout: Scout;
   scoutPositions: Record<Scout, { x: number; y: number }>;
   scoutTargets: Record<Scout, { x: number; y: number } | null>;
+  scoutRows: Record<Scout, number>;
   walkFrame: number;
   scene: SceneId;
   selectedVerb: Verb;
@@ -42,6 +46,8 @@ type State = {
 };
 
 const VERBS: Verb[] = ["look", "talk", "take", "use"];
+const SPRITE_COLS = 6;
+const SPRITE_ROWS = 4;
 
 const SCENES: Record<SceneId, Scene> = {
   forest: {
@@ -105,6 +111,10 @@ function createInitialState(): State {
     scoutTargets: {
       leander: null,
       noemi: null,
+    },
+    scoutRows: {
+      leander: 0,
+      noemi: 0,
     },
     walkFrame: 0,
     scene: "forest",
@@ -287,6 +297,21 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
   const scene = SCENES[state.scene];
   const questDone = state.flags.hasCompass && state.inventory.includes("moon amulet") && state.scene === "forest";
   const m = MESSAGES[lang].adventure;
+  const backgroundImage = useMemo(() => {
+    const img = new Image();
+    img.src = hauntedHouseBackground;
+    return img;
+  }, []);
+  const leanderSpriteImage = useMemo(() => {
+    const img = new Image();
+    img.src = leanderSpriteSheet;
+    return img;
+  }, []);
+  const noemiSpriteImage = useMemo(() => {
+    const img = new Image();
+    img.src = noemiSpriteSheet;
+    return img;
+  }, []);
 
   useEffect(() => {
     if (questDone && !state.flags.questComplete) {
@@ -309,6 +334,7 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
           walkFrame: (prev.walkFrame + 1) % 120,
           scoutPositions: { ...prev.scoutPositions },
           scoutTargets: { ...prev.scoutTargets },
+          scoutRows: { ...prev.scoutRows },
         };
         let changed = false;
 
@@ -333,6 +359,11 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
             x: pos.x + (dx / distance) * speed,
             y: pos.y + (dy / distance) * speed,
           };
+          if (Math.abs(dx) >= Math.abs(dy)) {
+            next.scoutRows[scout] = dx >= 0 ? 0 : 1;
+          } else {
+            next.scoutRows[scout] = dy < 0 ? 2 : 3;
+          }
           changed = true;
         });
 
@@ -352,16 +383,28 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.fillStyle = scene.palette.sky;
-    ctx.fillRect(0, 0, canvas.width, canvas.height * 0.5);
-    ctx.fillStyle = scene.palette.ground;
-    ctx.fillRect(0, canvas.height * 0.5, canvas.width, canvas.height * 0.5);
+    if (backgroundImage.complete && backgroundImage.naturalWidth > 0) {
+      const imgRatio = backgroundImage.naturalWidth / backgroundImage.naturalHeight;
+      const canvasRatio = canvas.width / canvas.height;
+      let sx = 0;
+      let sy = 0;
+      let sw = backgroundImage.naturalWidth;
+      let sh = backgroundImage.naturalHeight;
 
-    ctx.fillStyle = scene.palette.detail;
-    for (let i = 0; i < 16; i += 1) {
-      const x = (i * 33) % canvas.width;
-      const y = 150 + ((i * 17) % 90);
-      ctx.fillRect(x, y, 12, 24);
+      if (imgRatio > canvasRatio) {
+        sw = sh * canvasRatio;
+        sx = (backgroundImage.naturalWidth - sw) / 2;
+      } else {
+        sh = sw / canvasRatio;
+        sy = (backgroundImage.naturalHeight - sh) / 2;
+      }
+
+      ctx.drawImage(backgroundImage, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.fillStyle = scene.palette.sky;
+      ctx.fillRect(0, 0, canvas.width, canvas.height * 0.5);
+      ctx.fillStyle = scene.palette.ground;
+      ctx.fillRect(0, canvas.height * 0.5, canvas.width, canvas.height * 0.5);
     }
 
     scene.hotspots.forEach((id) => {
@@ -379,13 +422,31 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
       const pos = state.scoutPositions[scout];
       const moving = state.scoutTargets[scout] !== null;
       const legShift = moving && state.walkFrame % 16 < 8 ? 2 : -2;
+      const spriteImage = scout === "leander" ? leanderSpriteImage : noemiSpriteImage;
+
+      if (spriteImage.complete && spriteImage.naturalWidth > 0) {
+        const frameW = spriteImage.naturalWidth / SPRITE_COLS;
+        const frameH = spriteImage.naturalHeight / SPRITE_ROWS;
+        const frame = moving ? Math.floor(state.walkFrame / 6) % SPRITE_COLS : 0;
+        const row = state.scoutRows[scout] % SPRITE_ROWS;
+        ctx.drawImage(
+          spriteImage,
+          frame * frameW,
+          row * frameH,
+          frameW,
+          frameH,
+          pos.x - 4,
+          pos.y - 18,
+          32,
+          50
+        );
+        return;
+      }
 
       ctx.fillStyle = color;
       ctx.fillRect(pos.x, pos.y, 20, 22);
-
       ctx.fillRect(pos.x + 2, pos.y + 22, 6, 10 + legShift);
       ctx.fillRect(pos.x + 12, pos.y + 22, 6, 10 - legShift);
-
       ctx.fillStyle = "#f5d1b0";
       ctx.fillRect(pos.x + 3, pos.y - 9, 14, 9);
     };
@@ -397,7 +458,17 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 2;
     ctx.strokeRect(active.x - 2, active.y - 11, 24, 45);
-  }, [scene, state.activeScout, state.scoutPositions, state.scoutTargets, state.walkFrame]);
+  }, [
+    backgroundImage,
+    leanderSpriteImage,
+    noemiSpriteImage,
+    scene,
+    state.activeScout,
+    state.scoutPositions,
+    state.scoutRows,
+    state.scoutTargets,
+    state.walkFrame,
+  ]);
 
   const status = useMemo(() => {
     if (state.flags.questComplete) return m.statusQuestComplete;
