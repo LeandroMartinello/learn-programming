@@ -2,3 +2,13 @@ node_modules
 dist
 .DS_Store
 *.tsbuildinfo
+.vite/deps/_metadata.json
+.vite/deps/chunk-GFWMZNU4.js
+.vite/deps/chunk-GFWMZNU4.js.map
+.vite/deps/package.json
+.vite/deps/react-dom_client.js
+.vite/deps/react-dom_client.js.map
+.vite/deps/react.js
+.vite/deps/react.js.map
+.vite/deps/react_jsx-dev-runtime.js
+.vite/deps/react_jsx-dev-runtime.js.map
