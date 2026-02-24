@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import AdventureGame from "./components/AdventureGame";
 import SnakeGame from "./components/SnakeGame";
 import { MESSAGES, type Lang } from "./i18n";
+import hauntedHouseThumb from "./images/haunted_house.png";
 
 type GameId = "snake" | "adventure";
 
@@ -65,12 +66,7 @@ export default function App() {
                       <span className="snake-food" />
                     </>
                   ) : (
-                    <>
-                      <span className="moon" />
-                      <span className="house" />
-                      <span className="tree left" />
-                      <span className="tree right" />
-                    </>
+                    <img className="thumb-image" src={hauntedHouseThumb} alt="" />
                   )}
                 </span>
                 <span className="row-text">
