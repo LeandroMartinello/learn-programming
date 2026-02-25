@@ -40,3 +40,47 @@
 - Keine unnötigen zusätzlichen Libraries.
 - Bestehende Spiellogik soll funktionsfähig bleiben.
 - Änderungen sollen klar strukturiert und wartbar sein.
+
+## 7. Lokalisierung
+- Deutsch ist die Standardsprache der Anwendung.
+- Es muss eine Sprachauswahl (Combobox) auf der Launcher-Seite geben.
+- Mindestens Deutsch und Englisch werden unterstützt.
+- Zentrale UI-Texte in Launcher und Spielen müssen lokalisiert sein.
+
+## 8. Asset- und Szenenanforderungen (Adventure)
+- Das Szenenbild für Außenbereich ist `Spukhaus_Außen.png`.
+- Das Szenenbild soll den Canvas-Bereich visuell überlappen (kein harter Kasten-Look).
+- Für Leander wird `Walking_Leander_10x10.png` als Sprite-Sheet verwendet.
+- Für Noemi wird `Walking_Noemi_10x10_2.png` als Sprite-Sheet verwendet.
+- Color-Key `#18fdfe` muss transparent verarbeitet werden.
+
+## 9. Bewegungs- und Animationsanforderungen (Adventure)
+- Charaktere dürfen bei Klick nicht teleportieren, sondern müssen zum Ziel laufen.
+- Beide Charaktere bleiben gleichzeitig sichtbar.
+- Es bewegt sich immer der aktuell aktive/selektierte Charakter.
+- Bewegungsanimationen laufen zyklisch pro Richtung.
+- Richtungszuordnung Leander:
+  - Zeile 1: rechts
+  - Zeile 2: links
+  - Zeile 3: hinten
+  - Zeile 4: vorn
+  - Zeile 5: diagonal rechts-vorn
+  - Zeile 6: diagonal links-vorn
+  - Zeile 7–8: Reaktionen
+- Richtungszuordnung Noemi:
+  - Zeile 1: rechts
+  - Zeile 2: links
+  - Zeile 3: hinten
+  - Zeile 4: vorn
+  - Zeile 5: diagonal links-vorn
+  - Zeile 6: diagonal rechts-vorn
+  - Zeile 7: diagonal links-hinten
+  - Zeile 8: diagonal rechts-hinten
+  - Zeile 9–10: Reaktionen
+
+## 10. Interaktion und Kamera (Adventure)
+- Hotspot-Rahmen sollen nicht dauerhaft sichtbar sein.
+- Titel von Szenen-Items/Hotspots werden nur bei Hover angezeigt.
+- Die Szene soll horizontal mit einer Kamera folgen:
+  - Wenn der aktive Charakter in den 20%-Randbereich links/rechts kommt,
+    verschiebt sich die Szene horizontal.

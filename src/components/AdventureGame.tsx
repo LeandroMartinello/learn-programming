@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MESSAGES, type Lang } from "../i18n";
 import leanderAvatar from "../images/Leander_Avatar.png";
 import noemiAvatar from "../images/Noemi_Avatar.png";
-import hauntedHouseBackground from "../images/haunted_house.png";
-import leanderSpriteSheet from "../images/Sprites_Leander.png";
-import noemiSpriteSheet from "../images/Sprites_Noemi.png";
+import hauntedHouseBackground from "../images/Spukhaus_Außen.png";
+import leanderSpriteSheet from "../images/Walking_Leander_10x10.png";
+import noemiSpriteSheet from "../images/Walking_Noemi_10x10_2.png";
 
 type Verb = "look" | "talk" | "take" | "use";
 type Scout = "leander" | "noemi";
@@ -46,8 +46,8 @@ type State = {
 };
 
 const VERBS: Verb[] = ["look", "talk", "take", "use"];
-const SPRITE_COLS = 6;
-const SPRITE_ROWS = 4;
+const SPRITE_COLS = 12;
+const SPRITE_ROWS = 8;
 const COLOR_KEY = { r: 0x18, g: 0xfd, b: 0xfe };
 const COLOR_TOLERANCE = 28;
 
@@ -75,6 +75,27 @@ function makeColorKeyCanvas(image: HTMLImageElement): HTMLCanvasElement {
 
   offCtx.putImageData(imageData, 0, 0);
   return offscreen;
+}
+
+function getRowForDirection(scout: Scout, dx: number, dy: number): number {
+  const absX = Math.abs(dx);
+  const absY = Math.abs(dy);
+  const diagonal = absX > 0.5 && absY > 0.5;
+
+  if (scout === "leander") {
+    if (diagonal && dy > 0 && dx > 0) return 4; // rechts-vorn
+    if (diagonal && dy > 0 && dx < 0) return 5; // links-vorn
+    if (absX >= absY) return dx >= 0 ? 0 : 1; // rechts / links
+    return dy < 0 ? 2 : 3; // hinten / vorn
+  }
+
+  // Noemi
+  if (diagonal && dy > 0 && dx < 0) return 4; // links-vorn
+  if (diagonal && dy > 0 && dx > 0) return 5; // rechts-vorn
+  if (diagonal && dy < 0 && dx < 0) return 6; // links-hinten
+  if (diagonal && dy < 0 && dx > 0) return 7; // rechts-hinten
+  if (absX >= absY) return dx >= 0 ? 0 : 1; // rechts / links
+  return dy < 0 ? 2 : 3; // hinten / vorn
 }
 
 const SCENES: Record<SceneId, Scene> = {
@@ -320,6 +341,8 @@ type AdventureGameProps = {
 export default function AdventureGame({ lang }: AdventureGameProps) {
   const [state, setState] = useState<State>(() => createInitialState());
   const [avatarLoaded, setAvatarLoaded] = useState({ leander: false, noemi: false });
+  const [hoverHotspot, setHoverHotspot] = useState<string | null>(null);
+  const [cameraX, setCameraX] = useState(0);
   const [spriteLayers, setSpriteLayers] = useState<{
     leander: HTMLCanvasElement | null;
     noemi: HTMLCanvasElement | null;
@@ -328,6 +351,8 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
     noemi: null,
   });
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const worldWidthRef = useRef(512);
+  const maxCameraRef = useRef(0);
 
   const scene = SCENES[state.scene];
   const questDone = state.flags.hasCompass && state.inventory.includes("moon amulet") && state.scene === "forest";
@@ -426,11 +451,7 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
             x: pos.x + (dx / distance) * speed,
             y: pos.y + (dy / distance) * speed,
           };
-          if (Math.abs(dx) >= Math.abs(dy)) {
-            next.scoutRows[scout] = dx >= 0 ? 0 : 1;
-          } else {
-            next.scoutRows[scout] = dy < 0 ? 2 : 3;
-          }
+          next.scoutRows[scout] = getRowForDirection(scout, dx, dy);
           changed = true;
         });
 
@@ -447,26 +468,50 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    const active = state.scoutPositions[state.activeScout];
+    const leftThreshold = canvas.width * 0.2;
+    const rightThreshold = canvas.width * 0.8;
+    const activeScreenX = active.x - cameraX;
+
+    if (activeScreenX > rightThreshold) {
+      const desired = active.x - rightThreshold;
+      setCameraX(Math.min(maxCameraRef.current, Math.max(0, desired)));
+      return;
+    }
+
+    if (activeScreenX < leftThreshold) {
+      const desired = active.x - leftThreshold;
+      setCameraX(Math.min(maxCameraRef.current, Math.max(0, desired)));
+    }
+  }, [cameraX, state.activeScout, state.scoutPositions]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     if (backgroundImage.complete && backgroundImage.naturalWidth > 0) {
-      const imgRatio = backgroundImage.naturalWidth / backgroundImage.naturalHeight;
-      const canvasRatio = canvas.width / canvas.height;
-      let sx = 0;
-      let sy = 0;
-      let sw = backgroundImage.naturalWidth;
-      let sh = backgroundImage.naturalHeight;
+      const scale = canvas.height / backgroundImage.naturalHeight;
+      const worldWidth = backgroundImage.naturalWidth * scale;
+      worldWidthRef.current = worldWidth;
+      maxCameraRef.current = Math.max(0, worldWidth - canvas.width);
 
-      if (imgRatio > canvasRatio) {
-        sw = sh * canvasRatio;
-        sx = (backgroundImage.naturalWidth - sw) / 2;
-      } else {
-        sh = sw / canvasRatio;
-        sy = (backgroundImage.naturalHeight - sh) / 2;
+      const clampedCameraX = Math.min(maxCameraRef.current, Math.max(0, cameraX));
+      if (clampedCameraX !== cameraX) {
+        setCameraX(clampedCameraX);
+        return;
       }
 
-      ctx.drawImage(backgroundImage, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      // Slight overscan so the scene visually overlaps the previous frame boundary.
+      ctx.drawImage(
+        backgroundImage,
+        -cameraX - 16,
+        -10,
+        worldWidth + 32,
+        canvas.height + 20
+      );
     } else {
       ctx.fillStyle = scene.palette.sky;
       ctx.fillRect(0, 0, canvas.width, canvas.height * 0.5);
@@ -475,14 +520,15 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
     }
 
     scene.hotspots.forEach((id) => {
+      if (id !== hoverHotspot) return;
       const h = HOTSPOTS[id];
-      ctx.fillStyle = "rgba(255,255,255,0.18)";
-      ctx.fillRect(h.rect.x, h.rect.y, h.rect.w, h.rect.h);
-      ctx.strokeStyle = "rgba(255,255,255,0.66)";
-      ctx.strokeRect(h.rect.x, h.rect.y, h.rect.w, h.rect.h);
-      ctx.fillStyle = "#1a2035";
+      const labelX = h.rect.x - cameraX + 4;
+      const labelY = h.rect.y - 8;
+      ctx.fillStyle = "rgba(15, 20, 33, 0.78)";
+      ctx.fillRect(labelX - 4, labelY - 12, Math.max(74, h.label.length * 7), 16);
+      ctx.fillStyle = "#f6fbff";
       ctx.font = "12px sans-serif";
-      ctx.fillText(h.label, h.rect.x + 5, h.rect.y + 15);
+      ctx.fillText(h.label, labelX, labelY);
     });
 
     const drawScout = (scout: Scout, color: string) => {
@@ -502,7 +548,7 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
           row * frameH,
           frameW,
           frameH,
-          pos.x - 4,
+          pos.x - cameraX - 4,
           pos.y - 18,
           32,
           50
@@ -511,22 +557,19 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
       }
 
       ctx.fillStyle = color;
-      ctx.fillRect(pos.x, pos.y, 20, 22);
-      ctx.fillRect(pos.x + 2, pos.y + 22, 6, 10 + legShift);
-      ctx.fillRect(pos.x + 12, pos.y + 22, 6, 10 - legShift);
+      ctx.fillRect(pos.x - cameraX, pos.y, 20, 22);
+      ctx.fillRect(pos.x - cameraX + 2, pos.y + 22, 6, 10 + legShift);
+      ctx.fillRect(pos.x - cameraX + 12, pos.y + 22, 6, 10 - legShift);
       ctx.fillStyle = "#f5d1b0";
-      ctx.fillRect(pos.x + 3, pos.y - 9, 14, 9);
+      ctx.fillRect(pos.x - cameraX + 3, pos.y - 9, 14, 9);
     };
 
     drawScout("leander", "#2f66d2");
     drawScout("noemi", "#de4f85");
-
-    const active = state.scoutPositions[state.activeScout];
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(active.x - 2, active.y - 11, 24, 45);
   }, [
     backgroundImage,
+    cameraX,
+    hoverHotspot,
     scene,
     state.activeScout,
     state.scoutPositions,
@@ -563,13 +606,14 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
               const rect = canvas.getBoundingClientRect();
               const x = ((event.clientX - rect.left) * canvasWidth) / rect.width;
               const y = ((event.clientY - rect.top) * canvasHeight) / rect.height;
+              const worldX = x + cameraX;
               const hit = scene.hotspots.find((id) => {
                 const r = HOTSPOTS[id].rect;
-                return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+                return worldX >= r.x && worldX <= r.x + r.w && y >= r.y && y <= r.y + r.h;
               });
               setState((prev) => {
                 const nextPos = {
-                  x: Math.max(0, Math.min(canvasWidth - 20, Math.round(x - 10))),
+                  x: Math.max(0, Math.min(worldWidthRef.current - 20, Math.round(worldX - 10))),
                   y: Math.max(16, Math.min(canvasHeight - 32, Math.round(y - 16))),
                 };
                 let next: State = {
@@ -583,6 +627,19 @@ export default function AdventureGame({ lang }: AdventureGameProps) {
                 return next;
               });
             }}
+            onMouseMove={(event) => {
+              const canvas = event.currentTarget;
+              const rect = canvas.getBoundingClientRect();
+              const x = ((event.clientX - rect.left) * canvas.width) / rect.width;
+              const y = ((event.clientY - rect.top) * canvas.height) / rect.height;
+              const worldX = x + cameraX;
+              const hit = scene.hotspots.find((id) => {
+                const r = HOTSPOTS[id].rect;
+                return worldX >= r.x && worldX <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+              });
+              setHoverHotspot(hit ?? null);
+            }}
+            onMouseLeave={() => setHoverHotspot(null)}
           />
           <p>
             {scene.title}: {scene.description}
